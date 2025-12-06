@@ -149,7 +149,10 @@
     attachEvents();
     const all = await window.App.loadCSV();
     // filter by Affiliation equal to category (exact match)
-    categoryData = all.filter(it => (it.Affiliation||'').trim().toLowerCase() === (category||'').trim().toLowerCase());
+    //categoryData = all.filter(it => (it.Affiliation||'').trim().toLowerCase() === (category||'').trim().toLowerCase());
+    categoryData = all.filter(it =>
+      (it.Affiliation || '').trim().toLowerCase().includes((category || '').trim().toLowerCase())
+    );
     // obtain unique Types from categoryData
     const types = window.App.utils.unique(categoryData.map(d => d.Type));
     renderFilters(types);
