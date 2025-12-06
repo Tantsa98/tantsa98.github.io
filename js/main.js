@@ -23,7 +23,7 @@ const App = (function(){
     return out;
   }
 
-  async function loadCSV(path = 'BK.csv'){
+  async function loadCSV(path = 'data/BK.csv'){
     if(_data) return _data;
     try{
       const r = await fetch(path, {cache: "no-store"});
