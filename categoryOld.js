@@ -87,13 +87,9 @@
     mAff.textContent = item.Affiliation || '';
     mDesc.textContent = item.Desc || '';
 
-    // images — беремо назву ДО першої крапки
+    // images
     const imgsRaw = item.imgId || '';
-    currentImages = imgsRaw
-      .split(';')
-      .map(s => s.trim().split('.')[0])   // ← нова логіка
-      .filter(Boolean);
-
+    currentImages = imgsRaw.split(';').map(s => s.trim()).filter(Boolean);
     currentIndex = 0;
     updateCarousel();
     setOverlayVisible(true);
@@ -108,10 +104,8 @@
       nextBtn.style.display = 'none';
       return;
     }
-
-    // автоматично додаємо .jpg
-    const src = 'images/' + currentImages[currentIndex] + '.jpg';
-
+    // By default images are in /images/
+    const src = 'images/' + currentImages[currentIndex];
     carouselImg.src = src;
     carouselImg.alt = currentImages[currentIndex];
     imgCount.textContent = (currentIndex+1) + ' / ' + currentImages.length;
@@ -154,15 +148,17 @@
   async function init(){
     attachEvents();
     const all = await window.App.loadCSV();
-
+    // filter by Affiliation equal to category (exact match)
+    //categoryData = all.filter(it => (it.Affiliation||'').trim().toLowerCase() === (category||'').trim().toLowerCase());
     categoryData = all.filter(it =>
       (it.Affiliation || '').trim().toLowerCase().includes((category || '').trim().toLowerCase())
     );
-
+    // obtain unique Types from categoryData
     const types = window.App.utils.unique(categoryData.map(d => d.Type));
     renderFilters(types);
     renderGallery(categoryData);
   }
 
+  // start
   init();
 })();
