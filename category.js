@@ -43,7 +43,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 return `
                 <div class="card" data-id="${item.id}">
-                    <img src="media/${imgs[0]}" alt="${item.name}">
+                    <img src="./media/${imgs[0]}" alt="${item.name}">
                     <h3>${item.name} (${count})</h3>
                     <p>${item.type}</p>
                 </div>`;
@@ -93,7 +93,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function updateCarousel() {
         if (!currentImages.length) return;
 
-        carouselImg.src = `media/${currentImages[currentIndex]}`;
+        carouselImg.src = `./media/${currentImages[currentIndex]}`;
         imgCount.textContent = `${currentIndex + 1} / ${currentImages.length}`;
     }
 
