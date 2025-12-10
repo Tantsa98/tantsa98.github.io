@@ -1,9 +1,10 @@
-// ===== ЗАВАНТАЖЕННЯ BK.csv З WORKER =====
+// ===============================
+//   ЗАВАНТАЖЕННЯ BK.csv ЧЕРЕЗ WORKER
+// ===============================
+
 async function loadBK() {
     try {
-        const res = await fetch(
-            `https://old-fog-c80a.tantsa98.workers.dev/`
-        );
+        const res = await fetch(`https://old-fog-c80a.tantsa98.workers.dev/`);
         const text = await res.text();
 
         const lines = text.trim().split("\n");
@@ -13,6 +14,7 @@ async function loadBK() {
             const [name, count] = line.split(",");
             map[name.trim()] = Number(count.trim());
         }
+
         return map;
     } catch (err) {
         console.error("Помилка BK:", err);
@@ -25,7 +27,9 @@ loadBK().then(data => {
     window.BKDATA = data;
 });
 
-// ====== ЗАВАНТАЖЕННЯ JSON ======
+// ===============================
+//   ЗАВАНТАЖЕННЯ JSON ФАЙЛІВ
+// ===============================
 async function loadJSON(path) {
     const res = await fetch(path);
     return await res.json();

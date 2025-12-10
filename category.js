@@ -1,15 +1,25 @@
 document.addEventListener("DOMContentLoaded", async () => {
+
     const CATEGORY_NAME = document.body.dataset.category;
     const gallery = document.getElementById("gallery");
     const filtersBox = document.getElementById("filters");
 
     // ==== Дані =====
     const data = await loadJSON("data.json");
-    const mediaIndex = await loadJSON("media-index.json");
+    const mediaList = await loadJSON("media-index.json"); 
+    // mediaList = ["409#1.jpg", "409#2.mp4", ...]
 
     const items = data.filter(el => el.category === CATEGORY_NAME);
 
-    // Заповнити фільтри
+    // ==== Побудувати карту медіафайлів ====
+    const mediaIndex = {};
+    mediaList.forEach(name => {
+        const id = name.split("#")[0];
+        if (!mediaIndex[id]) mediaIndex[id] = [];
+        mediaIndex[id].push(name);
+    });
+
+    // ---- Фільтри ----
     const types = [...new Set(items.map(x => x.type))];
     filtersBox.innerHTML = types
         .map(t => `<label><input type="checkbox" value="${t}"> ${t}</label>`)
@@ -20,11 +30,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function applyFilters() {
         const selected = [...checkboxes].filter(c => c.checked).map(c => c.value);
-
         const filtered = selected.length
             ? items.filter(x => selected.includes(x.type))
             : items;
-
         renderCards(filtered);
     }
 
@@ -39,11 +47,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         gallery.innerHTML = arr
             .map(item => {
                 const imgs = mediaIndex[item.id] || [];
+                const first = imgs.length ? `./media/${imgs[0]}` : "./img/noimg.png";
+
                 const count = window.BKDATA[item.name] ?? 0;
 
                 return `
                 <div class="card" data-id="${item.id}">
-                    <img src="./media/${imgs[0]}" alt="${item.name}">
+                    <img src="${first}" alt="${item.name}">
                     <h3>${item.name} (${count})</h3>
                     <p>${item.type}</p>
                 </div>`;
@@ -86,29 +96,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         mDesc.textContent = item.description;
 
         updateCarousel();
-
         overlay.classList.remove("hidden");
     });
 
     function updateCarousel() {
-        if (!currentImages.length) return;
+        if (!currentImages.length) {
+            carouselImg.src = "";
+            imgCount.textContent = "0 / 0";
+            return;
+        }
 
         carouselImg.src = `./media/${currentImages[currentIndex]}`;
         imgCount.textContent = `${currentIndex + 1} / ${currentImages.length}`;
     }
 
     document.getElementById("prevImg").onclick = () => {
-        if (currentIndex > 0) {
-            currentIndex--;
-            updateCarousel();
-        }
+        if (!currentImages.length) return;
+        currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
+        updateCarousel();
     };
 
     document.getElementById("nextImg").onclick = () => {
-        if (currentIndex < currentImages.length - 1) {
-            currentIndex++;
-            updateCarousel();
-        }
+        if (!currentImages.length) return;
+        currentIndex = (currentIndex + 1) % currentImages.length;
+        updateCarousel();
     };
 
     closeModal.addEventListener("click", () => {
