@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ==== Дані =====
     const data = await loadJSON("data.json");
-    const mediaIndex = await loadJSON("mediaIndex.json");
+    const mediaIndex = await loadJSON("media-index.json");
 
     const items = data.filter(el => el.category === CATEGORY_NAME);
 
