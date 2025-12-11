@@ -1,8 +1,10 @@
-// category.js
+// category.js (старий код + інтегрована Cloudflare логіка)
 (function(){
 
   const category = document.documentElement.getAttribute('data-category')
     || document.body.getAttribute('data-category');
+
+  const pageKey = (document.body.dataset.page || '').trim();
 
   const filtersRoot = document.getElementById('filters');
   const galleryRoot = document.getElementById('gallery');
@@ -25,7 +27,9 @@
   let categoryData = [];
 
   let mediaIndex = null;
+  let cloudCounts = null;
 
+  // ------------------------ MEDIA INDEX (збережено 1:1) ------------------------
   async function loadMediaIndex(){
     if (mediaIndex) return mediaIndex;
     try {
@@ -44,6 +48,45 @@
     return all.filter(name => name.startsWith(imgId + "#"));
   }
 
+  // ------------------------ CLOUD COUNTS (ДОДАНО) ------------------------
+  async function loadCloudCounts(){
+    try {
+      const res = await fetch('https://old-fog-c80a.tantsa98.workers.dev', {cache: "no-store"});
+      if(!res.ok) throw new Error("Cloudflare error");
+      const json = await res.json();
+
+      if(pageKey && json[pageKey]){
+        cloudCounts = json[pageKey];
+      } else {
+        cloudCounts = null;
+      }
+    } catch (e){
+      console.warn("Cloudflare недоступний:", e);
+      cloudCounts = null;
+    }
+  }
+
+  // ------------------------ MODAL (стара логіка + додані лічильники) ------------------------
+  async function openModal(item){
+    let name = item.Name || '';
+
+    if(cloudCounts && name && cloudCounts[name] !== undefined){
+      name = `${name} (${cloudCounts[name]})`;
+    }
+
+    mName.textContent = name;
+    mType.textContent = item.Type || '';
+    mAff.textContent = item.Affiliation || '';
+    mDesc.textContent = item.Desc || '';
+
+    const imgId = (item.imgId || '').trim();
+    currentImages = await findMediaByImgId(imgId);
+
+    currentIndex = 0;
+    updateCarousel();
+    setOverlayVisible(true);
+  }
+
   function setOverlayVisible(visible){
     if(visible){
       overlay.classList.remove('hidden');
@@ -54,6 +97,58 @@
     }
   }
 
+  function updateCarousel(){
+    if(!currentImages.length){
+      carouselEl.replaceWith(carouselEl.cloneNode());
+      carouselEl = document.getElementById('carouselImg');
+      imgCount.textContent = '0 / 0';
+      prevBtn.style.display = 'none';
+      nextBtn.style.display = 'none';
+      return;
+    }
+
+    const file = currentImages[currentIndex];
+    const ext = file.split('.').pop().toLowerCase();
+    const url = 'media/' + encodeURIComponent(file);
+
+    let newEl;
+
+    if(['mp4','webm','mov'].includes(ext)){
+      newEl = document.createElement('video');
+      newEl.controls = true;
+    } else {
+      newEl = document.createElement('img');
+      newEl.alt = file;
+      newEl.loading = "lazy";
+      newEl.decoding = "async";
+      newEl.classList.add("fade-in");
+    }
+
+    newEl.id = 'carouselImg';
+    newEl.src = url;
+
+    carouselEl.replaceWith(newEl);
+    carouselEl = newEl;
+
+    imgCount.textContent = (currentIndex+1)+' / '+currentImages.length;
+
+    prevBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
+    nextBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
+  }
+
+  function prevImage(){
+    if(!currentImages.length) return;
+    currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
+    updateCarousel();
+  }
+
+  function nextImage(){
+    if(!currentImages.length) return;
+    currentIndex = (currentIndex + 1) % currentImages.length;
+    updateCarousel();
+  }
+
+  // ------------------------ FILTER + GALLERY (додано тільки лічильники) ------------------------
   function renderFilters(types){
     if(!filtersRoot) return;
     filtersRoot.innerHTML = '';
@@ -93,16 +188,21 @@
     const frag = document.createDocumentFragment();
 
     data.forEach(item => {
+      let name = item.Name;
+
+      if(cloudCounts && name && cloudCounts[name] !== undefined){
+        name = `${name} (${cloudCounts[name]})`;
+      }
+
       const card = document.createElement('div');
       card.className = 'card-item';
       card.tabIndex = 0;
       card.setAttribute('role','button');
-      card.innerHTML = `<h3>${item.Name}</h3><p class="type">${item.Type}</p>`;
+
+      card.innerHTML = `<h3>${name}</h3><p class="type">${item.Type}</p>`;
 
       card.addEventListener('click', () => openModal(item));
-      card.addEventListener('keydown', e => { 
-        if(e.key === 'Enter') openModal(item);
-      });
+      card.addEventListener('keydown', e => { if(e.key === 'Enter') openModal(item); });
 
       frag.appendChild(card);
     });
@@ -110,67 +210,23 @@
     galleryRoot.appendChild(frag);
   }
 
-  async function openModal(item){
-    mName.textContent = item.Name || '';
-    mType.textContent = item.Type || '';
-    mAff.textContent = item.Affiliation || '';
-    mDesc.textContent = item.Desc || '';
+  // ------------------------ INIT ------------------------
+  async function init(){
+    const all = await window.App.loadCSV();
+    await loadCloudCounts(); // <= ДОДАНО
 
-    const imgId = (item.imgId || '').trim();
-    currentImages = await findMediaByImgId(imgId);
+    categoryData = all.filter(it =>
+      (it.Affiliation || '').trim().toLowerCase()
+        .includes((category || '').trim().toLowerCase())
+    );
 
-    currentIndex = 0;
-    updateCarousel();
-    setOverlayVisible(true);
+    const types = window.App.utils.unique(categoryData.map(d => d.Type));
+
+    renderFilters(types);
+    renderGallery(categoryData);
   }
 
-  function updateCarousel(){
-    if(!currentImages.length){
-      carouselEl.replaceWith(carouselEl.cloneNode());
-      carouselEl = document.getElementById('carouselImg');
-      imgCount.textContent = '0 / 0';
-      prevBtn.style.display = 'none';
-      nextBtn.style.display = 'none';
-      return;
-    }
-
-    const file = currentImages[currentIndex];
-    const ext = file.split('.').pop().toLowerCase();
-    const url = 'media/' + encodeURIComponent(file);
-
-    let newEl;
-
-    if(['mp4','webm','mov'].includes(ext)){
-      newEl = document.createElement('video');
-      newEl.controls = true;
-    } else {
-      newEl = document.createElement('img');
-      newEl.alt = file;
-    }
-
-    newEl.id = 'carouselImg';
-    newEl.src = url;
-
-    carouselEl.replaceWith(newEl);
-    carouselEl = newEl;
-
-    imgCount.textContent = (currentIndex+1)+' / '+currentImages.length;
-
-    prevBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
-    nextBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
-  }
-
-  function prevImage(){
-    if(!currentImages.length) return;
-    currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
-    updateCarousel();
-  }
-
-  function nextImage(){
-    if(!currentImages.length) return;
-    currentIndex = (currentIndex + 1) % currentImages.length;
-    updateCarousel();
-  }
+  attachEvents();
 
   function attachEvents(){
     if(filtersRoot){
@@ -188,29 +244,14 @@
     }
 
     if(closeModal) closeModal.addEventListener('click', () => setOverlayVisible(false));
-    if(overlay) overlay.addEventListener('click', e => { 
-      if(e.target === overlay) setOverlayVisible(false); 
+    if(overlay) overlay.addEventListener('click', e => {
+      if(e.target === overlay) setOverlayVisible(false);
     });
 
     prevBtn.addEventListener('click', prevImage);
     nextBtn.addEventListener('click', nextImage);
   }
 
-  async function init(){
-    attachEvents();
-
-    const all = await window.App.loadCSV();
-
-    categoryData = all.filter(it =>
-      (it.Affiliation || '').trim().toLowerCase()
-        .includes((category || '').trim().toLowerCase())
-    );
-
-    const types = window.App.utils.unique(categoryData.map(d => d.Type));
-
-    renderFilters(types);
-    renderGallery(categoryData);
-  }
-
   init();
+
 })();
