@@ -1,8 +1,9 @@
-// category.js
+// category.js (старий код + інтегрована Cloudflare логіка)
 (function(){
 
-  const categoryLabel = document.documentElement.getAttribute('data-category')
-    || document.body.getAttribute('data-category') || '';
+  const category = document.documentElement.getAttribute('data-category')
+    || document.body.getAttribute('data-category');
+
   const pageKey = (document.body.dataset.page || '').trim();
 
   const filtersRoot = document.getElementById('filters');
@@ -28,11 +29,11 @@
   let mediaIndex = null;
   let cloudCounts = null;
 
-  // ---------------------- MEDIA INDEX ----------------------
+  // ------------------------ MEDIA INDEX (збережено 1:1) ------------------------
   async function loadMediaIndex(){
     if (mediaIndex) return mediaIndex;
     try {
-      const res = await fetch('data/media-index.json', {cache: "no-store"});
+      const res = await fetch('data/media-index.json');
       mediaIndex = await res.json();
       return mediaIndex;
     } catch (e){
@@ -44,44 +45,36 @@
 
   async function findMediaByImgId(imgId){
     const all = await loadMediaIndex();
-    if(!imgId) return [];
     return all.filter(name => name.startsWith(imgId + "#"));
   }
 
-  // ---------------------- CLOUD COUNTS ----------------------
+  // ------------------------ CLOUD COUNTS (ДОДАНО) ------------------------
   async function loadCloudCounts(){
     try {
       const res = await fetch('https://old-fog-c80a.tantsa98.workers.dev', {cache: "no-store"});
-      if(!res.ok) throw new Error('Cloudflare response not ok');
-      const j = await res.json();
-      if(pageKey && j && j[pageKey]){
-        cloudCounts = j[pageKey];
+      if(!res.ok) throw new Error("Cloudflare error");
+      const json = await res.json();
+
+      if(pageKey && json[pageKey]){
+        cloudCounts = json[pageKey];
       } else {
         cloudCounts = null;
       }
     } catch (e){
-      console.warn("Не вдалося підвантажити дані з Cloudflare:", e);
+      console.warn("Cloudflare недоступний:", e);
       cloudCounts = null;
     }
   }
 
-  // ---------------------- MODAL ----------------------
-  function setOverlayVisible(visible){
-    if(visible){
-      overlay.classList.remove('hidden');
-      overlay.setAttribute('aria-hidden','false');
-    } else {
-      overlay.classList.add('hidden');
-      overlay.setAttribute('aria-hidden','true');
-    }
-  }
-
+  // ------------------------ MODAL (стара логіка + додані лічильники) ------------------------
   async function openModal(item){
-    mName.textContent = item.Name || '';
-    if(cloudCounts && item.Name && Object.prototype.hasOwnProperty.call(cloudCounts, item.Name)){
-      mName.textContent = `${item.Name} (${cloudCounts[item.Name]})`;
+    let name = item.Name || '';
+
+    if(cloudCounts && name && cloudCounts[name] !== undefined){
+      name = `${name} (${cloudCounts[name]})`;
     }
 
+    mName.textContent = name;
     mType.textContent = item.Type || '';
     mAff.textContent = item.Affiliation || '';
     mDesc.textContent = item.Desc || '';
@@ -92,6 +85,16 @@
     currentIndex = 0;
     updateCarousel();
     setOverlayVisible(true);
+  }
+
+  function setOverlayVisible(visible){
+    if(visible){
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden','false');
+    } else {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden','true');
+    }
   }
 
   function updateCarousel(){
@@ -128,6 +131,7 @@
     carouselEl = newEl;
 
     imgCount.textContent = (currentIndex+1)+' / '+currentImages.length;
+
     prevBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
     nextBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
   }
@@ -144,7 +148,7 @@
     updateCarousel();
   }
 
-  // ---------------------- FILTERS + GALLERY ----------------------
+  // ------------------------ FILTER + GALLERY (додано тільки лічильники) ------------------------
   function renderFilters(types){
     if(!filtersRoot) return;
     filtersRoot.innerHTML = '';
@@ -165,7 +169,8 @@
 
   function getSelectedTypes(){
     if(!filtersRoot) return [];
-    return Array.from(filtersRoot.querySelectorAll('input:checked')).map(i => i.value);
+    return Array.from(filtersRoot.querySelectorAll('input:checked'))
+      .map(i => i.value);
   }
 
   function filterByTypes(data, selected){
@@ -181,25 +186,23 @@
     }
 
     const frag = document.createDocumentFragment();
-    data.forEach(item => {
 
-      let displayName = item.Name || '';
-      if(cloudCounts && displayName && Object.prototype.hasOwnProperty.call(cloudCounts, displayName)){
-        displayName = `${displayName} (${cloudCounts[displayName]})`;
+    data.forEach(item => {
+      let name = item.Name;
+
+      if(cloudCounts && name && cloudCounts[name] !== undefined){
+        name = `${name} (${cloudCounts[name]})`;
       }
 
       const card = document.createElement('div');
       card.className = 'card-item';
       card.tabIndex = 0;
       card.setAttribute('role','button');
-      card.dataset.imgId = item.imgId || '';
 
-      card.innerHTML = `<h3>${displayName}</h3><p class="type">${item.Type}</p>`;
+      card.innerHTML = `<h3>${name}</h3><p class="type">${item.Type}</p>`;
 
       card.addEventListener('click', () => openModal(item));
-      card.addEventListener('keydown', e => {
-        if(e.key === 'Enter') openModal(item);
-      });
+      card.addEventListener('keydown', e => { if(e.key === 'Enter') openModal(item); });
 
       frag.appendChild(card);
     });
@@ -207,32 +210,25 @@
     galleryRoot.appendChild(frag);
   }
 
-  // ---------------------- INIT ----------------------
+  // ------------------------ INIT ------------------------
   async function init(){
-    // ВСЕ ВАЖЛИВО: повернули старий механізм
-    let all = [];
-    if(window.App && typeof window.App.loadCSV === 'function'){
-      all = await window.App.loadCSV();
-    } else {
-      // fallback тільки якщо App.loadCSV відсутній
-      all = await loadCSVFallback();
-    }
-
-    await loadCloudCounts();
+    const all = await window.App.loadCSV();
+    await loadCloudCounts(); // <= ДОДАНО
 
     categoryData = all.filter(it =>
       (it.Affiliation || '').trim().toLowerCase()
-        .includes((categoryLabel || '').trim().toLowerCase())
+        .includes((category || '').trim().toLowerCase())
     );
 
-    const types = [...new Set(categoryData.map(d => d.Type).filter(Boolean))];
+    const types = window.App.utils.unique(categoryData.map(d => d.Type));
 
     renderFilters(types);
     renderGallery(categoryData);
   }
 
   attachEvents();
-  async function attachEvents(){
+
+  function attachEvents(){
     if(filtersRoot){
       filtersRoot.addEventListener('change', () => {
         const selected = getSelectedTypes();
@@ -252,8 +248,8 @@
       if(e.target === overlay) setOverlayVisible(false);
     });
 
-    if(prevBtn) prevBtn.addEventListener('click', prevImage);
-    if(nextBtn) nextBtn.addEventListener('click', nextImage);
+    prevBtn.addEventListener('click', prevImage);
+    nextBtn.addEventListener('click', nextImage);
   }
 
   init();
