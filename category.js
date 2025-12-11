@@ -1,132 +1,221 @@
-document.addEventListener("DOMContentLoaded", async () => {
+// category.js
+(function(){
 
-    const CATEGORY_NAME = document.body.dataset.category;
-    const gallery = document.getElementById("gallery");
-    const filtersBox = document.getElementById("filters");
+  const category = document.documentElement.getAttribute('data-category')
+    || document.body.getAttribute('data-category');
 
-    // ==== Дані =====
-    const data = await loadJSON("data.json");
-    const mediaList = await loadJSON("media-index.json"); 
-    // mediaList = ["409#1.jpg", "409#2.mp4", ...]
+  const filtersRoot = document.getElementById('filters');
+  const galleryRoot = document.getElementById('gallery');
+  const clearBtn = document.getElementById('clearFilters');
 
-    const items = data.filter(el => el.category === CATEGORY_NAME);
+  const overlay = document.getElementById('overlay');
+  const closeModal = document.getElementById('closeModal');
+  const mName = document.getElementById('mName');
+  const mType = document.getElementById('mType');
+  const mAff = document.getElementById('mAff');
+  const mDesc = document.getElementById('mDesc');
 
-    // ==== Побудувати карту медіафайлів ====
-    const mediaIndex = {};
-    mediaList.forEach(name => {
-        const id = name.split("#")[0];
-        if (!mediaIndex[id]) mediaIndex[id] = [];
-        mediaIndex[id].push(name);
-    });
+  const prevBtn = document.getElementById('prevImg');
+  const nextBtn = document.getElementById('nextImg');
+  const imgCount = document.getElementById('imgCount');
+  let carouselEl = document.getElementById('carouselImg');
 
-    // ---- Фільтри ----
-    const types = [...new Set(items.map(x => x.type))];
-    filtersBox.innerHTML = types
-        .map(t => `<label><input type="checkbox" value="${t}"> ${t}</label>`)
-        .join("");
+  let currentImages = [];
+  let currentIndex = 0;
+  let categoryData = [];
 
-    const checkboxes = filtersBox.querySelectorAll("input[type=checkbox]");
-    const clearBtn = document.getElementById("clearFilters");
+  let mediaIndex = null;
 
-    function applyFilters() {
-        const selected = [...checkboxes].filter(c => c.checked).map(c => c.value);
-        const filtered = selected.length
-            ? items.filter(x => selected.includes(x.type))
-            : items;
-        renderCards(filtered);
+  async function loadMediaIndex(){
+    if (mediaIndex) return mediaIndex;
+    try {
+      const res = await fetch('data/media-index.json');
+      mediaIndex = await res.json();
+      return mediaIndex;
+    } catch (e){
+      console.error("Не вдалося завантажити media-index.json", e);
+      mediaIndex = [];
+      return mediaIndex;
+    }
+  }
+
+  async function findMediaByImgId(imgId){
+    const all = await loadMediaIndex();
+    return all.filter(name => name.startsWith(imgId + "#"));
+  }
+
+  function setOverlayVisible(visible){
+    if(visible){
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden','false');
+    } else {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden','true');
+    }
+  }
+
+  function renderFilters(types){
+    if(!filtersRoot) return;
+    filtersRoot.innerHTML = '';
+    if(!types.length){
+      filtersRoot.innerHTML = '<p class="muted">Немає варіантів</p>';
+      return;
     }
 
-    checkboxes.forEach(cb => cb.addEventListener("change", applyFilters));
-    clearBtn.addEventListener("click", () => {
-        checkboxes.forEach(c => (c.checked = false));
-        applyFilters();
+    const frag = document.createDocumentFragment();
+    types.forEach(t => {
+      const id = 'f_'+t.replace(/\s+/g,'_');
+      const label = document.createElement('label');
+      label.innerHTML = `<input type="checkbox" value="${t}" id="${id}"> ${t}`;
+      frag.appendChild(label);
     });
+    filtersRoot.appendChild(frag);
+  }
 
-    // ========= РЕНДЕР КАРТОК ===========
-    function renderCards(arr) {
-        gallery.innerHTML = arr
-            .map(item => {
-                const imgs = mediaIndex[item.id] || [];
-                const first = imgs.length ? `./media/${imgs[0]}` : "./img/noimg.png";
+  function getSelectedTypes(){
+    if(!filtersRoot) return [];
+    return Array.from(filtersRoot.querySelectorAll('input:checked'))
+      .map(i => i.value);
+  }
 
-                const count = window.BKDATA[item.name] ?? 0;
+  function filterByTypes(data, selected){
+    if(!selected.length) return data;
+    return data.filter(d => selected.includes(d.Type));
+  }
 
-                return `
-                <div class="card" data-id="${item.id}">
-                    <img src="${first}" alt="${item.name}">
-                    <h3>${item.name} (${count})</h3>
-                    <p>${item.type}</p>
-                </div>`;
-            })
-            .join("");
+  function renderGallery(data){
+    galleryRoot.innerHTML = '';
+    if(!data.length){
+      galleryRoot.innerHTML = '<p class="muted">Нічого не знайдено.</p>';
+      return;
     }
 
-    applyFilters();
+    const frag = document.createDocumentFragment();
 
-    // ======== POPUP ==========
-    const overlay = document.getElementById("overlay");
-    const closeModal = document.getElementById("closeModal");
+    data.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'card-item';
+      card.tabIndex = 0;
+      card.setAttribute('role','button');
+      card.innerHTML = `<h3>${item.Name}</h3><p class="type">${item.Type}</p>`;
 
-    const carouselImg = document.getElementById("carouselImg");
-    const imgCount = document.getElementById("imgCount");
+      card.addEventListener('click', () => openModal(item));
+      card.addEventListener('keydown', e => { 
+        if(e.key === 'Enter') openModal(item);
+      });
 
-    const mName = document.getElementById("mName");
-    const mType = document.getElementById("mType");
-    const mAff = document.getElementById("mAff");
-    const mDesc = document.getElementById("mDesc");
-
-    let currentImages = [];
-    let currentIndex = 0;
-
-    gallery.addEventListener("click", e => {
-        const card = e.target.closest(".card");
-        if (!card) return;
-
-        const id = card.dataset.id;
-        const item = items.find(x => x.id == id);
-
-        currentImages = mediaIndex[id] || [];
-        currentIndex = 0;
-
-        const count = window.BKDATA[item.name] ?? 0;
-
-        mName.textContent = `${item.name} (${count})`;
-        mType.textContent = item.type;
-        mAff.textContent = item.affiliation;
-        mDesc.textContent = item.description;
-
-        updateCarousel();
-        overlay.classList.remove("hidden");
+      frag.appendChild(card);
     });
 
-    function updateCarousel() {
-        if (!currentImages.length) {
-            carouselImg.src = "";
-            imgCount.textContent = "0 / 0";
-            return;
-        }
+    galleryRoot.appendChild(frag);
+  }
 
-        carouselImg.src = `./media/${currentImages[currentIndex]}`;
-        imgCount.textContent = `${currentIndex + 1} / ${currentImages.length}`;
+  async function openModal(item){
+    mName.textContent = item.Name || '';
+    mType.textContent = item.Type || '';
+    mAff.textContent = item.Affiliation || '';
+    mDesc.textContent = item.Desc || '';
+
+    const imgId = (item.imgId || '').trim();
+    currentImages = await findMediaByImgId(imgId);
+
+    currentIndex = 0;
+    updateCarousel();
+    setOverlayVisible(true);
+  }
+
+  function updateCarousel(){
+    if(!currentImages.length){
+      carouselEl.replaceWith(carouselEl.cloneNode());
+      carouselEl = document.getElementById('carouselImg');
+      imgCount.textContent = '0 / 0';
+      prevBtn.style.display = 'none';
+      nextBtn.style.display = 'none';
+      return;
     }
 
-    document.getElementById("prevImg").onclick = () => {
-        if (!currentImages.length) return;
-        currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
-        updateCarousel();
-    };
+    const file = currentImages[currentIndex];
+    const ext = file.split('.').pop().toLowerCase();
+    const url = 'media/' + encodeURIComponent(file);
 
-    document.getElementById("nextImg").onclick = () => {
-        if (!currentImages.length) return;
-        currentIndex = (currentIndex + 1) % currentImages.length;
-        updateCarousel();
-    };
+    let newEl;
 
-    closeModal.addEventListener("click", () => {
-        overlay.classList.add("hidden");
+    if(['mp4','webm','mov'].includes(ext)){
+      newEl = document.createElement('video');
+      newEl.controls = true;
+    } else {
+      newEl = document.createElement('img');
+      newEl.alt = file;
+
+      // 🔥 Додаємо справжній lazy loading
+      newEl.loading = "lazy";
+      newEl.decoding = "async";
+      newEl.classList.add("fade-in");
+    }
+
+    newEl.id = 'carouselImg';
+    newEl.src = url;
+
+    carouselEl.replaceWith(newEl);
+    carouselEl = newEl;
+
+    imgCount.textContent = (currentIndex+1)+' / '+currentImages.length;
+
+    prevBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
+    nextBtn.style.display = currentImages.length > 1 ? 'block' : 'none';
+  }
+
+  function prevImage(){
+    if(!currentImages.length) return;
+    currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
+    updateCarousel();
+  }
+
+  function nextImage(){
+    if(!currentImages.length) return;
+    currentIndex = (currentIndex + 1) % currentImages.length;
+    updateCarousel();
+  }
+
+  function attachEvents(){
+    if(filtersRoot){
+      filtersRoot.addEventListener('change', () => {
+        const selected = getSelectedTypes();
+        renderGallery(filterByTypes(categoryData, selected));
+      });
+    }
+
+    if(clearBtn){
+      clearBtn.addEventListener('click', () => {
+        Array.from(filtersRoot.querySelectorAll('input')).forEach(i => i.checked = false);
+        renderGallery(categoryData);
+      });
+    }
+
+    if(closeModal) closeModal.addEventListener('click', () => setOverlayVisible(false));
+    if(overlay) overlay.addEventListener('click', e => { 
+      if(e.target === overlay) setOverlayVisible(false); 
     });
 
-    overlay.addEventListener("click", e => {
-        if (e.target === overlay) overlay.classList.add("hidden");
-    });
-});
+    prevBtn.addEventListener('click', prevImage);
+    nextBtn.addEventListener('click', nextImage);
+  }
+
+  async function init(){
+    attachEvents();
+
+    const all = await window.App.loadCSV();
+
+    categoryData = all.filter(it =>
+      (it.Affiliation || '').trim().toLowerCase()
+        .includes((category || '').trim().toLowerCase())
+    );
+
+    const types = window.App.utils.unique(categoryData.map(d => d.Type));
+
+    renderFilters(types);
+    renderGallery(categoryData);
+  }
+
+  init();
+})();

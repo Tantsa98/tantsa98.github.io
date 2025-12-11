@@ -1,36 +1,52 @@
-// ===============================
-//   ЗАВАНТАЖЕННЯ BK.csv ЧЕРЕЗ WORKER
-// ===============================
+// main.js
+// Завантажує та парсить CSV, експортує getData()
 
-async function loadBK() {
-    try {
-        const res = await fetch(`https://old-fog-c80a.tantsa98.workers.dev/`);
-        const text = await res.text();
+const App = (function(){
+  let _data = null;
 
-        const lines = text.trim().split("\n");
-        const map = {};
-
-        for (let line of lines) {
-            const [name, count] = line.split(",");
-            map[name.trim()] = Number(count.trim());
-        }
-
-        return map;
-    } catch (err) {
-        console.error("Помилка BK:", err);
-        return {};
+  // Простий CSV-парсер, який враховує лапки і коми в лапках
+  function parseCSV(text){
+    const rows = text.trim().split(/\r?\n/);
+    if(!rows.length) return [];
+    const header = rows[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g,'').trim());
+    const out = [];
+    for(let i=1;i<rows.length;i++){
+      const line = rows[i];
+      if(!line.trim()) continue;
+      const values = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g,'').trim());
+      const obj = {};
+      header.forEach((h, idx) => {
+        obj[h] = values[idx] === undefined ? '' : values[idx];
+      });
+      out.push(obj);
     }
-}
+    return out;
+  }
 
-window.BKDATA = {};
-loadBK().then(data => {
-    window.BKDATA = data;
-});
+  async function loadCSV(path = 'data/BK.csv'){
+    if(_data) return _data;
+    try{
+      const r = await fetch(path, {cache: "no-store"});
+      if(!r.ok) throw new Error('CSV not found');
+      const txt = await r.text();
+      _data = parseCSV(txt);
+      return _data;
+    }catch(e){
+      console.error('Error loading CSV:', e);
+      _data = [];
+      return _data;
+    }
+  }
 
-// ===============================
-//   ЗАВАНТАЖЕННЯ JSON ФАЙЛІВ
-// ===============================
-async function loadJSON(path) {
-    const res = await fetch(path);
-    return await res.json();
-}
+  // допоміжні
+  function unique(arr){ return [...new Set(arr)].filter(Boolean); }
+
+  return {
+    loadCSV,
+    getAll: () => _data,
+    utils: { unique }
+  };
+})();
+
+// робимо доступним глобально
+window.App = App;
