@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Довідник БК</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* FULLSCREEN SPLASH */
+    #splash {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      background-image: url("logo.webp");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: cover;
+      z-index: 9999;
+      opacity: 1;
+      transition: opacity .6s ease;
+    }
+
+    #splash.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body class="page-root">
+
+  <!-- SPLASH -->
+  <div id="splash"></div>
+
+  <header class="topbar">
+    <h1 class="logo">Довідник БК</h1>
+  </header>
+
+  <main class="center">
+    <p class="lead">Оберіть категорію:</p>
+
+    <div class="grid-3">
+      <a class="card big" href="rozvidka.html">
+        <h2>Mavic/Autel</h2>
+        <p class="muted">скиди</p>
+      </a>
+
+      <a class="card big" href="bombers.html">
+        <h2>Бомбери</h2>
+        <p class="muted">скиди</p>
+      </a>
+
+      <a class="card big" href="fpv.html">
+        <h2>FPV</h2>
+        <p class="muted">радіо/опта</p>
+      </a>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <small>Власність 125 ОВМБр</small>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const splash = document.getElementById("splash");
+
+      /*
+       * Показуємо splash лише якщо:
+       * - НЕ існує ключ "splashShown"
+       * (навігація між сторінками splash НЕ запускає)
+       */
+      const alreadyShown = localStorage.getItem("splashShown") === "1";
+
+      if (alreadyShown) {
+        // миттєво прибрати splash без видимого миготіння
+        splash.remove();
+        return;
+      }
+
+      // показуємо splash тільки при першому відкритті
+      setTimeout(() => {
+        splash.classList.add("hidden");
+
+        // даємо анімації завершитись
+        setTimeout(() => {
+          splash.remove();
+        }, 600);
+
+        // важливо: встановлюємо ключ ДО завершення анімації,
+        // щоб при поверненні з інших сторінок не було заставки.
+        localStorage.setItem("splashShown", "1");
+      }, 1500);
+    });
+  </script>
+
+</body>
+</html>
